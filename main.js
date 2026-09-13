@@ -85,7 +85,10 @@ function parseBlock(source) {
       const colonIdx = trimmed.indexOf(":");
       if (colonIdx === -1) continue;
       const head = trimmed.slice(0, colonIdx).trim().split(/\s+/);
-      const id = head.shift().toUpperCase();
+      // IDs and input references must share one casing convention, or a
+      // reference to an earlier step silently fails to match. Lowercase
+      // everything (ingredient keys are already lowercase by convention).
+      const id = head.shift().toLowerCase();
       const inputs = head.map((s) => s.toLowerCase());
       const desc = trimmed.slice(colonIdx + 1).trim();
       result.steps.push({ id, inputs, desc });
