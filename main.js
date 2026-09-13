@@ -65,7 +65,7 @@ function parseBlock(source) {
     // indented line -> belongs to current section
     const trimmed = line.trim();
     if (section === "ingredients") {
-      const m = /^([A-Za-z0-9_]+):\s*(.+)$/.exec(trimmed);
+      const m = /^(\S+?):\s*(.+)$/.exec(trimmed);
       if (!m) continue;
       const key = m[1].toLowerCase();
       const rest = m[2].trim().split(/\s+/);
