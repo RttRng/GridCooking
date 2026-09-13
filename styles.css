@@ -45,6 +45,17 @@
   border: 1px dashed var(--background-modifier-border);
 }
 
+.gc-duplicate-row {
+  border: 1px dashed var(--text-faint) !important;
+}
+
+.gc-empty {
+  border: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  min-width: 90px;
+}
+
 .gc-gray {
   opacity: 0.45;
   background: var(--background-secondary) !important;

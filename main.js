@@ -166,12 +166,22 @@ function layout(parsed) {
       closeOpenSegment(state.row, atCol);
       return state.row;
     } else {
-      // reuse: spawn a duplicate row, starting back at the ORIGIN column
-      // of the base instance, grayed the whole way until used here.
+      // reuse: mirror the FULL history of the original row into a fresh
+      // duplicate row (ingredient cell + every processing step so far),
+      // marked with a small copy icon rather than a generic placeholder.
       const dupRow = newRow();
-      const baseLabel = state.label || id.toUpperCase();
-      openSegment(dupRow, state.col, `(reuse ${id.toUpperCase()})`, "duplicate", true);
-      closeOpenSegment(dupRow, atCol);
+      const originalSegments = rows[state.row].segments;
+      originalSegments.forEach((seg, i) => {
+        const endCol = seg.endCol === null ? atCol : seg.endCol;
+        rows[dupRow].segments.push({
+          startCol: seg.startCol,
+          endCol,
+          label: i === 0 ? "\u29C9 " + seg.label : seg.label,
+          kind: seg.kind,
+          gray: false,
+          isDuplicate: true,
+        });
+      });
       return dupRow;
     }
   }
@@ -277,19 +287,50 @@ function renderGrid(container, layoutResult) {
     }
   }
 
+  // Third pass: once only ONE row still has any content from column c
+  // onward, let that row's cells stretch down to fill the remaining table
+  // height instead of leaving dead whitespace next to a thin single lane.
+  const totalRows = rows.length;
+  const lastEndCol = rows.map((row) =>
+    row.segments.length ? row.segments[row.segments.length - 1].endCol : 0
+  );
+  for (let c = 0; c < maxCol; c++) {
+    const survivors = [];
+    for (let r = 0; r < totalRows; r++) {
+      if (lastEndCol[r] > c) survivors.push(r);
+    }
+    if (survivors.length !== 1) continue;
+    const r = survivors[0];
+    const cell = matrix[r][c];
+    if (cell && cell.start && cell.rowspan === 1) {
+      const newSpan = totalRows - r;
+      cell.rowspan = newSpan;
+      for (let r2 = r + 1; r2 < totalRows; r2++) {
+        matrix[r2][c] = { covered: true };
+      }
+    }
+  }
+
   const table = container.createEl("table", { cls: "gc-grid" });
   const tbody = table.createEl("tbody");
   for (let r = 0; r < rows.length; r++) {
     const tr = tbody.createEl("tr");
     for (let c = 0; c < maxCol; c++) {
       const cell = matrix[r][c];
-      if (!cell || cell.covered) continue;
+      if (cell && cell.covered) continue; // reserved by a rowspan/colspan above/left
+      if (!cell) {
+        // genuinely empty grid position: still needs a placeholder <td> or
+        // every later row silently shifts columns leftward in the browser.
+        tr.createEl("td", { cls: "gc-empty" });
+        continue;
+      }
       const td = tr.createEl("td", { text: cell.label });
       if (cell.colspan > 1) td.colSpan = cell.colspan;
       if (cell.rowspan > 1) td.rowSpan = cell.rowspan;
       td.addClass("gc-cell");
       td.addClass("gc-" + cell.kind);
       if (cell.gray) td.addClass("gc-gray");
+      if (cell.isDuplicate) td.addClass("gc-duplicate-row");
     }
   }
 }
