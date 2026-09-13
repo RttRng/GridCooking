@@ -189,7 +189,13 @@ function layout(parsed) {
   let col = 1; // column 0 reserved for raw ingredients
   for (const step of steps) {
     const consumedRows = step.inputs.map((inp) => resolveInput(inp, col));
-    const ownerRow = consumedRows.length ? consumedRows[0] : newRow();
+    // Anchor the step's own segment at the SAME row the merge rowspan pass
+    // will look for (the lowest row index among consumed rows), not just
+    // whichever input happens to be listed first. Otherwise, if the first
+    // -listed input isn't also the topologically-earliest one, the rowspan
+    // gets planted one (or more) rows too low and swallows the wrong rows,
+    // corrupting column alignment for every step rendered after it.
+    const ownerRow = consumedRows.length ? Math.min(...consumedRows) : newRow();
 
     openSegment(ownerRow, col, step.desc || step.id, "step", false);
     instanceState.set(step.id, {
