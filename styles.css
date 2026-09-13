@@ -1,0 +1,53 @@
+.gc-wrapper {
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.gc-ingredients {
+  border-collapse: collapse;
+  margin-bottom: 12px;
+}
+
+.gc-ing-cell {
+  padding: 2px 8px 2px 0;
+  font-size: 0.9em;
+  color: var(--text-muted);
+}
+
+.gc-grid {
+  border-collapse: separate;
+  border-spacing: 4px;
+  table-layout: fixed;
+}
+
+.gc-cell {
+  border-radius: 6px;
+  padding: 6px 10px;
+  min-width: 90px;
+  font-size: 0.85em;
+  vertical-align: middle;
+  text-align: center;
+  word-break: break-word;
+}
+
+.gc-ingredient {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.gc-step {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.gc-duplicate {
+  background: var(--background-secondary);
+  border: 1px dashed var(--background-modifier-border);
+}
+
+.gc-gray {
+  opacity: 0.45;
+  background: var(--background-secondary) !important;
+  color: var(--text-faint) !important;
+  border-style: dashed;
+}
