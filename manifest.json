@@ -1,7 +1,7 @@
 {
   "id": "grid-cooking",
   "name": "Grid Cooking",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "minAppVersion": "1.0.0",
   "description": "Note recipes as a compact ingredient list + node graph, rendered as a grid diagram.",
   "author": "you",
