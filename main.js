@@ -166,13 +166,22 @@ function layout(parsed) {
       closeOpenSegment(state.row, atCol);
       return state.row;
     } else {
-      // reuse: mirror the FULL history of the original row into a fresh
-      // duplicate row (ingredient cell + every processing step so far),
-      // marked with a small copy icon rather than a generic placeholder.
+      // reuse: mirror the history of the original row into a fresh
+      // duplicate row, marked with a small copy icon.
       const dupRow = newRow();
-      const originalSegments = rows[state.row].segments;
-      originalSegments.forEach((seg, i) => {
-        const endCol = seg.endCol === null ? atCol : seg.endCol;
+      const allSegments = rows[state.row].segments;
+      // Only mirror THIS id's own lineage. state.row may since have become
+      // a shared trunk row for a sibling merge (another step that also
+      // consumed this id) — that sibling's segment has startCol > state.col
+      // and must not be copied into the duplicate.
+      const ownSegments = allSegments.filter((seg) => seg.startCol <= state.col);
+      ownSegments.forEach((seg, i) => {
+        const isLast = i === ownSegments.length - 1;
+        // The last segment in this id's own history is extended up to the
+        // point of reuse (atCol) even if it was already closed earlier —
+        // otherwise the dormant gap between when it closed and now renders
+        // as a stray empty cell.
+        const endCol = isLast ? atCol : seg.endCol;
         rows[dupRow].segments.push({
           startCol: seg.startCol,
           endCol,
@@ -187,15 +196,38 @@ function layout(parsed) {
   }
 
   let col = 1; // column 0 reserved for raw ingredients
+  // Tracks, per step id, the full vertical row-range [minR,maxR] its own
+  // merge cell already occupies — so a LATER step consuming that id knows
+  // to swallow the whole range, not just the id's own anchor row.
+  const stepBlock = new Map();
   for (const step of steps) {
     const consumedRows = step.inputs.map((inp) => resolveInput(inp, col));
-    // Anchor the step's own segment at the SAME row the merge rowspan pass
-    // will look for (the lowest row index among consumed rows), not just
-    // whichever input happens to be listed first. Otherwise, if the first
-    // -listed input isn't also the topologically-earliest one, the rowspan
-    // gets planted one (or more) rows too low and swallows the wrong rows,
-    // corrupting column alignment for every step rendered after it.
-    const ownerRow = consumedRows.length ? Math.min(...consumedRows) : newRow();
+
+    // The true vertical extent this step needs to swallow. A plain
+    // ingredient (or a fresh duplicate row) only occupies its own single
+    // row. But if an input is itself the output of an earlier merge step
+    // that already rowspans several rows, a later step consuming it must
+    // swallow that FULL range too — otherwise rows "trapped" inside that
+    // earlier block are left with no cell at this column (stray empties),
+    // and this step's own rowspan won't stretch to cover them either.
+    let minR = Infinity;
+    let maxR = -Infinity;
+    step.inputs.forEach((inp, idx) => {
+      const r = consumedRows[idx];
+      let blockMax = r;
+      const prior = stepBlock.get(inp);
+      // Only inherit the prior block's extent if this input is still
+      // living on that block's own anchor row — a freshly spun-off
+      // duplicate row is always a single row on its own.
+      if (prior && prior[0] === r) blockMax = prior[1];
+      minR = Math.min(minR, r);
+      maxR = Math.max(maxR, blockMax);
+    });
+    const ownerRow = consumedRows.length ? minR : newRow();
+    if (!consumedRows.length) {
+      minR = ownerRow;
+      maxR = ownerRow;
+    }
 
     openSegment(ownerRow, col, step.desc || step.id, "step", false);
     instanceState.set(step.id, {
@@ -206,7 +238,10 @@ function layout(parsed) {
     });
     step._ownerRow = ownerRow;
     step._consumedRows = consumedRows;
+    step._blockMinR = minR;
+    step._blockMaxR = maxR;
     step._col = col;
+    stepBlock.set(step.id, [minR, maxR]);
     col += 1;
   }
 
@@ -274,21 +309,29 @@ function renderGrid(container, layoutResult) {
   });
 
   // Second pass: apply merge rowspans at each step's column, across the
-  // contiguous min..max row range of its consumed rows (v1 simplification).
+  // contiguous min..max row range of its consumed rows (v1 simplification),
+  // widened to include any nested block a consumed input already spans
+  // (see _blockMinR/_blockMaxR in layout()).
   for (const step of layoutResult.steps) {
     const consumed = step._consumedRows;
     if (!consumed || consumed.length < 2) continue;
-    const minR = Math.min(...consumed);
-    const maxR = Math.max(...consumed);
+    const minR = step._blockMinR;
+    const maxR = step._blockMaxR;
     const c = step._col;
     const span = maxR - minR + 1;
-    // owner cell (should be at minR or wherever the start segment for this
-    // step landed) gets the rowspan; other rows at this column become covered.
+    // The owner cell may itself span more than one column (if it stayed
+    // "open" across several columns before being consumed here) — swallow
+    // that same width for every other row in the range, or a sliver of
+    // those columns is left uncovered for them too.
+    const ownerCell = matrix[step._ownerRow][c];
+    const width = ownerCell && ownerCell.start ? ownerCell.colspan : 1;
     for (let r = minR; r <= maxR; r++) {
-      if (matrix[r][c] && matrix[r][c].start) {
-        matrix[r][c].rowspan = span;
+      if (r === step._ownerRow) {
+        if (matrix[r][c] && matrix[r][c].start) matrix[r][c].rowspan = span;
       } else {
-        matrix[r][c] = { covered: true };
+        for (let cc = c; cc < c + width; cc++) {
+          matrix[r][cc] = { covered: true };
+        }
       }
     }
   }
